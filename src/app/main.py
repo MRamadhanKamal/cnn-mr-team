@@ -6,8 +6,17 @@ import os
 import numpy as np
 from io import BytesIO
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,     
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # labels = {
 #     '2017051001': 0,
@@ -26,7 +35,6 @@ app = FastAPI()
 
 @app.post('/predict')
 async def root(file: UploadFile = File(...)):
-    
     if 'image' not in file.content_type:
         raise HTTPException(415, 'File harus berupa gambar!')
     try:
@@ -50,12 +58,12 @@ async def root(file: UploadFile = File(...)):
         prob_class_resnet101 = pred_resnet101.tolist()[0]
 
         if max(prob_class_resnet50) < 0.8:
-            resnet50_class = 'Unnkown'
+            resnet50_class = 'Unknown'
         else:
             resnet50_class = labels[idx_class_resnet50]
 
         if max(prob_class_resnet101) < 0.8:
-            resnet101_class = 'Unnkown'
+            resnet101_class = 'Unknown'
         else:
             resnet101_class = labels[idx_class_resnet101]
 
@@ -70,8 +78,8 @@ async def root(file: UploadFile = File(...)):
                 'probability': max(prob_class_resnet101) * 100,
             }
         }
-    except:
-        raise HTTPException(500, 'Ada Error')
+    except Exception as e:
+        raise HTTPException(e)
 
 
 @app.get('/test')
@@ -103,10 +111,8 @@ def test_function():
 if __name__ == "__main__":
 
     dataset_dir = '../../datasets/to_train/training'
-    npm = '2017051017'
-    filename = '20230329_153813.png'
 
     resnet50 = tf.keras.models.load_model('../../models/resnet50_best.h5')
     resnet101 = tf.keras.models.load_model('../../models/resnet101_best.h5')
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8001)
