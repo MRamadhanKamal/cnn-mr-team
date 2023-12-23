@@ -3,6 +3,7 @@ from PIL import Image
 import tensorflow as tf
 import uvicorn
 import os
+import cv2
 import numpy as np
 from io import BytesIO
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 app.add_middleware(
-    CORSMiddleware,     
+    CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -43,6 +44,7 @@ async def root(file: UploadFile = File(...)):
         image = image.resize((224, 224))
 
         x = img_to_array(image)
+        x = x[:, :, :3]
         x = np.expand_dims(x, axis=0)
         img = np.vstack([x])
 
@@ -56,30 +58,33 @@ async def root(file: UploadFile = File(...)):
 
         prob_class_resnet50 = pred_resnet50.tolist()[0]
         prob_class_resnet101 = pred_resnet101.tolist()[0]
+        
+        max_prob_class_resnet_50 = max(prob_class_resnet50)
+        max_prob_class_resnet_101 = max(prob_class_resnet101)
 
-        if max(prob_class_resnet50) < 0.8:
+        if max_prob_class_resnet_50 < 0.5:
             resnet50_class = 'Unknown'
         else:
             resnet50_class = labels[idx_class_resnet50]
 
-        if max(prob_class_resnet101) < 0.8:
+        if max_prob_class_resnet_101 < 0.5:
             resnet101_class = 'Unknown'
         else:
             resnet101_class = labels[idx_class_resnet101]
 
-        return {
-            'ResNet50': {
-                'prediction': resnet50_class,
-                'probability': max(prob_class_resnet50) * 100,
-            },
+        if max_prob_class_resnet_101 > max_prob_class_resnet_50:
+            prediction = resnet101_class
+            prob = max_prob_class_resnet_101
+        else:
+            prediction = resnet50_class
+            prob = max_prob_class_resnet_50
 
-            'ResNet101': {
-                'prediction': resnet101_class,
-                'probability': max(prob_class_resnet101) * 100,
-            }
+        return {
+            'prediction': prediction,
+            'probability': prob * 100,
         }
-    except Exception as e:
-        raise HTTPException(e)
+    except Exception as exception:
+        raise HTTPException(500, exception)
 
 
 @app.get('/test')
@@ -112,7 +117,9 @@ if __name__ == "__main__":
 
     dataset_dir = '../../datasets/to_train/training'
 
-    resnet50 = tf.keras.models.load_model('../../models/resnet50_best.h5')
-    resnet101 = tf.keras.models.load_model('../../models/resnet101_best.h5')
+    resnet50 = tf.keras.models.load_model(
+        '../../models/resnet50_best_model.h5')
+    resnet101 = tf.keras.models.load_model(
+        '../../models/resnet101_best_model.h5')
 
     uvicorn.run(app, host="127.0.0.1", port=8001)
