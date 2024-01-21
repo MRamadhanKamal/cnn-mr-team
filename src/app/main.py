@@ -34,7 +34,7 @@ app.add_middleware(
 # }
 
 
-@app.post('/predict')
+@app.post('/api/v1/predict')
 async def root(file: UploadFile = File(...)):
     if 'image' not in file.content_type:
         raise HTTPException(415, 'File harus berupa gambar!')
@@ -45,6 +45,7 @@ async def root(file: UploadFile = File(...)):
 
         x = img_to_array(image)
         x = x[:, :, :3]
+        x = tf.keras.applications.resnet.preprocess_input(x)
         x = np.expand_dims(x, axis=0)
         img = np.vstack([x])
 
@@ -62,12 +63,12 @@ async def root(file: UploadFile = File(...)):
         max_prob_class_resnet_50 = max(prob_class_resnet50)
         max_prob_class_resnet_101 = max(prob_class_resnet101)
 
-        if max_prob_class_resnet_50 < 0.5:
+        if max_prob_class_resnet_50 < 0.4:
             resnet50_class = 'Unknown'
         else:
             resnet50_class = labels[idx_class_resnet50]
 
-        if max_prob_class_resnet_101 < 0.5:
+        if max_prob_class_resnet_101 < 0.4:
             resnet101_class = 'Unknown'
         else:
             resnet101_class = labels[idx_class_resnet101]
@@ -85,32 +86,6 @@ async def root(file: UploadFile = File(...)):
         }
     except Exception as exception:
         raise HTTPException(500, exception)
-
-
-@app.get('/test')
-def test_function():
-    model = tf.keras.models.load_model('../../models/resnet101.h5')
-    image_path = os.path.join(dataset_dir, npm, filename)
-    image = load_img(image_path, target_size=(128, 128))
-
-    x = img_to_array(image)
-    x = np.expand_dims(x, axis=0)
-    img = np.vstack([x])
-
-    pred = model.predict(img)
-
-    predicted_class = np.argmax(pred, axis=1)
-    labels = {'2017051001': 0, '2017051017': 1,
-              '2117051009': 2, '2117051048': 3}
-    labels = dict((v, k) for k, v in labels.items())
-
-    predictions = [labels[k] for k in predicted_class]
-
-    return {
-        'tes': predictions,
-        'predict': pred.tolist()[0],
-        'Class': '',
-    }
 
 
 if __name__ == "__main__":
